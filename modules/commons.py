@@ -5,7 +5,17 @@ from torch import nn
 from torch.nn import functional as F
 from munch import Munch
 import json
+import argparse
 
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ("yes", "true", "t", "y", "1"):
+        return True
+    elif v.lower() in ("no", "false", "f", "n", "0"):
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
 
 class AttrDict(dict):
     def __init__(self, *args, **kwargs):
@@ -427,6 +437,12 @@ def build_model(args, stage="DiT"):
         nets = Munch(
             encoder=encoder,
             quantizer=quantizer,
+        )
+    elif stage == "mel_vocos":
+        from modules.vocos import Vocos
+        decoder = Vocos(args)
+        nets = Munch(
+            decoder=decoder,
         )
     else:
         raise ValueError(f"Unknown stage: {stage}")

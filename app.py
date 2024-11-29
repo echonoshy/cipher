@@ -45,19 +45,6 @@ bigvgan_model = bigvgan.BigVGAN.from_pretrained('nvidia/bigvgan_v2_22khz_80band_
 bigvgan_model.remove_weight_norm()
 bigvgan_model = bigvgan_model.eval().to(device)
 
-ckpt_path, config_path = load_custom_model_from_hf("Plachta/FAcodec", 'pytorch_model.bin', 'config.yml')
-
-codec_config = yaml.safe_load(open(config_path))
-codec_model_params = recursive_munch(codec_config['model_params'])
-codec_encoder = build_model(codec_model_params, stage="codec")
-
-ckpt_params = torch.load(ckpt_path, map_location="cpu")
-
-for key in codec_encoder:
-    codec_encoder[key].load_state_dict(ckpt_params[key], strict=False)
-_ = [codec_encoder[key].eval() for key in codec_encoder]
-_ = [codec_encoder[key].to(device) for key in codec_encoder]
-
 # whisper
 from transformers import AutoFeatureExtractor, WhisperModel
 
@@ -131,13 +118,14 @@ def adjust_f0_semitones(f0_sequence, n_semitones):
 def crossfade(chunk1, chunk2, overlap):
     fade_out = np.cos(np.linspace(0, np.pi / 2, overlap)) ** 2
     fade_in = np.cos(np.linspace(np.pi / 2, 0, overlap)) ** 2
-    chunk2[:overlap] = chunk2[:overlap] * fade_in + chunk1[-overlap:] * fade_out
+    if len(chunk2) < overlap:
+        chunk2[:overlap] = chunk2[:overlap] * fade_in[:len(chunk2)] + (chunk1[-overlap:] * fade_out)[:len(chunk2)]
+    else:
+        chunk2[:overlap] = chunk2[:overlap] * fade_in + chunk1[-overlap:] * fade_out
     return chunk2
 
 # streaming and chunk processing related params
-max_context_window = sr // hop_length * 30
 overlap_frame_len = 16
-overlap_wave_len = overlap_frame_len * hop_length
 bitrate = "320k"
 
 @torch.no_grad()
@@ -147,6 +135,9 @@ def voice_conversion(source, target, diffusion_steps, length_adjust, inference_c
     mel_fn = to_mel if not f0_condition else to_mel_f0
     bigvgan_fn = bigvgan_model if not f0_condition else bigvgan_44k_model
     sr = 22050 if not f0_condition else 44100
+    hop_length = 256 if not f0_condition else 512
+    max_context_window = sr // hop_length * 30
+    overlap_wave_len = overlap_frame_len * hop_length
     # Load audio
     source_audio = librosa.load(source, sr=sr)[0]
     ref_audio = librosa.load(target, sr=sr)[0]
@@ -239,8 +230,8 @@ def voice_conversion(source, target, diffusion_steps, length_adjust, inference_c
     style2 = campplus_model(feat2.unsqueeze(0))
 
     if f0_condition:
-        F0_ori = rmvpe.infer_from_audio(ref_waves_16k[0], thred=0.5)
-        F0_alt = rmvpe.infer_from_audio(converted_waves_16k[0], thred=0.5)
+        F0_ori = rmvpe.infer_from_audio(ref_waves_16k[0], thred=0.03)
+        F0_alt = rmvpe.infer_from_audio(converted_waves_16k[0], thred=0.03)
 
         F0_ori = torch.from_numpy(F0_ori).to(device)[None]
         F0_alt = torch.from_numpy(F0_alt).to(device)[None]
@@ -279,13 +270,14 @@ def voice_conversion(source, target, diffusion_steps, length_adjust, inference_c
         chunk_cond = cond[:, processed_frames:processed_frames + max_source_window]
         is_last_chunk = processed_frames + max_source_window >= cond.size(1)
         cat_condition = torch.cat([prompt_condition, chunk_cond], dim=1)
-        # Voice Conversion
-        vc_target = inference_module.cfm.inference(cat_condition,
-                                                   torch.LongTensor([cat_condition.size(1)]).to(mel2.device),
-                                                   mel2, style2, None, diffusion_steps,
-                                                   inference_cfg_rate=inference_cfg_rate)
-        vc_target = vc_target[:, :, mel2.size(-1):]
-        vc_wave = bigvgan_fn(vc_target)[0]
+        with torch.autocast(device_type=device.type, dtype=torch.float16):
+            # Voice Conversion
+            vc_target = inference_module.cfm.inference(cat_condition,
+                                                       torch.LongTensor([cat_condition.size(1)]).to(mel2.device),
+                                                       mel2, style2, None, diffusion_steps,
+                                                       inference_cfg_rate=inference_cfg_rate)
+            vc_target = vc_target[:, :, mel2.size(-1):]
+            vc_wave = bigvgan_fn(vc_target)[0]
         if processed_frames == 0:
             if is_last_chunk:
                 output_wave = vc_wave[0].cpu().numpy()
