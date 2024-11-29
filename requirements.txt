@@ -13,8 +13,8 @@ pydub
 resemblyzer
 jiwer
 transformers
-FreeSimpleGUI
+# FreeSimpleGUI
 soundfile
-sounddevice
+# sounddevice
 modelscope
 funasr
