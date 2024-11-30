@@ -21,3 +21,4 @@ reconstructed/
 .python-version
 ruff.log
 /configs/inuse/
+wav/
