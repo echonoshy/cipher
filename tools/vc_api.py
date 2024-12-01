@@ -297,7 +297,7 @@ def main():
                  sr=sr,
                  bitrate=bitrate,
                  format="mp3",
-                 output_file="wav/1.mp3")
+                 output_file="data/1.mp3")
    
 
 if __name__ == "__main__":
