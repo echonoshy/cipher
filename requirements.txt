@@ -19,3 +19,6 @@ soundfile
 modelscope
 funasr
 pyrootutils
+fastapi 
+uvicorn
+redis 

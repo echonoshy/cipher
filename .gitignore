@@ -22,3 +22,5 @@ reconstructed/
 ruff.log
 /configs/inuse/
 wav/
+data/
+databases/
