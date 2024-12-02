@@ -93,7 +93,7 @@ def process_task(payload: TaskPayload, models: Any):
         callback_payload = {
             "status": "completed",
             "task_id": payload.task_id,
-            "output_file": output_file
+            "result_audio_url": output_file
         }
         send_callback(payload.callback_url, callback_payload)
 

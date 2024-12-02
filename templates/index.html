@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音频克隆任务客户端</title>
+    <script>
+        // 定期刷新任务状态
+        function refreshTasks() {
+            fetch('/tasks') // 请求任务状态
+                .then(response => response.json())
+                .then(data => {
+                    const taskList = document.getElementById('task-list');
+                    taskList.innerHTML = ''; // 清空任务列表
+                    for (const [task_id, task_info] of Object.entries(data.tasks)) {
+                        const listItem = document.createElement('li');
+                        listItem.innerHTML = `
+                            <strong>任务 ID:</strong> ${task_id}<br>
+                            <strong>状态:</strong> ${task_info.status}<br>
+                            ${task_info.result_audio_url ? 
+                                `<audio controls>
+                                    <source src="${task_info.result_audio_url}" type="audio/mpeg">
+                                    Your browser does not support the audio element.
+                                </audio>` : ''}
+                            <hr>
+                        `;
+                        taskList.appendChild(listItem);
+                    }
+                })
+                .catch(error => console.error('Error fetching tasks:', error));
+        }
+
+        // 每隔 5 秒刷新一次任务状态
+        setInterval(refreshTasks, 5000);
+
+        // 页面加载完成后立即刷新
+        document.addEventListener('DOMContentLoaded', refreshTasks);
+    </script>
+</head>
+<body>
+    <h1>音频克隆任务客户端</h1>
+    
+    <!-- 上传音频文件 -->
+    <h2>提交任务</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <label for="reference_audio">Reference Audio:</label>
+        <input type="file" id="reference_audio" name="reference_audio" required>
+        <br><br>
+        <label for="source_audio">Source Audio:</label>
+        <input type="file" id="source_audio" name="source_audio" required>
+        <br><br>
+        <button type="submit">提交任务</button>
+    </form>
+
+    <!-- 任务状态展示 -->
+    <h2>任务状态</h2>
+    <ul id="task-list">
+        <!-- 动态插入任务状态 -->
+    </ul>
+</body>
+</html>

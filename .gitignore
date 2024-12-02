@@ -24,3 +24,8 @@ ruff.log
 wav/
 data/
 databases/
+uploads/
+
+
+# db
+*.rdb
